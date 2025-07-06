@@ -28,12 +28,41 @@ local function register_biome_grass(name)
         sunlight_propagates = true,
         paramtype = "light",
         is_ground_content = true,
+
+        on_place = function(itemstack, placer, pointed_thing)
+            local pos = pointed_thing.above
+            if not pos then return itemstack end
+
+            -- Get biome id and biome name at the placed position
+            local biome_id = minetest.get_biome_data(pos).biome
+            local biome_name = minetest.get_biome_name(biome_id)
+
+            -- Compose the biome grass node name
+            local biome_node_name = "mapgen:grass_block_" .. biome_name
+
+            -- Check if node is registered for that biome and place it instead
+            if minetest.registered_nodes[biome_node_name] then
+                minetest.set_node(pos, {name = biome_node_name})
+                if not minetest.is_creative_enabled(placer:get_player_name()) then
+                    itemstack:take_item()
+                end
+                return itemstack
+            end
+
+            -- Fallback: place plains grass block normally
+            minetest.set_node(pos, {name = "mapgen:grass_block_plains"})
+            if not minetest.is_creative_enabled(placer:get_player_name()) then
+                itemstack:take_item()
+            end
+            return itemstack
+        end,
     })
 end
 
 for biome_name, _ in pairs(biome_colors) do
     register_biome_grass(biome_name)
 end
+
 
 -- Dirt block (shared across all biomes)
 minetest.register_node("mapgen:dirt", {

@@ -1,137 +1,249 @@
 -- myth_ui/init.lua
 
+local modpath = minetest.get_modpath(minetest.get_current_modname())
 local myth_ui = {}
-
 local hud_elements = {}
 
--- Helper function to safely remove HUD elements
+-- Constants
+local MAX_BREATH = 10
+local MAX_HEALTH = 20
+local MAX_HUNGER = 20
+local MAX_THIRST = 10
+
+-- XP Bar constants
+local XP_BAR_POS = {x = 0.5, y = 0.9}  -- bottom center, just above hotbar
+local XP_BAR_SIZE = {x = 90, y = -5}  -- adjusted shorter length
+local XP_BAR_SCALE = {x = 3, y = 2}   -- scale to make bar bigger
+
+-- Player effects state storage
+local player_effects = {}
+local breath_timers = {}
+local player_xp = {}
+
+-- Helper: Remove HUD elements safely
 local function remove_hud(player)
     local name = player:get_player_name()
     if not hud_elements[name] then return end
-
-    for key, element in pairs(hud_elements[name]) do
-        if type(element) == "table" then
-            for _, id in ipairs(element) do
+    for _, elem in pairs(hud_elements[name]) do
+        if type(elem) == "table" then
+            for _, id in ipairs(elem) do
                 player:hud_remove(id)
             end
         else
-            player:hud_remove(element)
+            player:hud_remove(elem)
         end
     end
-
     hud_elements[name] = nil
 end
 
--- Initialize HUD elements for a player
+local function get_xp_bar_offset()
+    return {
+        x = -(XP_BAR_SIZE.x * XP_BAR_SCALE.x / 2),
+        y = 0,
+    }
+end
+
 local function init_hud(player)
     local name = player:get_player_name()
     hud_elements[name] = {}
 
-    local base_x = 0.03  -- Left side
+    local base_x = 0.03
     local base_y = 0.97
-    local spacing = 0.03
+    local spacing_y = 0.05
+    local icon_scale = 1.6
+    local text_offset_x = 0.13
 
-    -- Health
-    hud_elements[name].health = player:hud_add({
-        hud_elem_type = "statbar",
+    hud_elements[name].health_icon = player:hud_add({
+        hud_elem_type = "image",
         position = {x = base_x, y = base_y},
-        text = "myth_heart.png",
-        number = 20,
-        direction = 0,
-        size = {x = 24, y = 24},
+        scale = {x = icon_scale, y = icon_scale},
+        text = "hudbars_icon_health.png",
         alignment = {x = 0, y = 0},
-        offset = {x = 0, y = 0},
+    })
+    hud_elements[name].health_text = player:hud_add({
+        hud_elem_type = "text",
+        position = {x = base_x + text_offset_x, y = base_y + 0.005},
+        text = tostring(MAX_HEALTH),
+        alignment = {x = 0, y = 0},
+        scale = {x = 1.5, y = 1.5},
+        number = 0xFF4444,
     })
 
-    -- Armor
-    hud_elements[name].armor = player:hud_add({
-        hud_elem_type = "statbar",
-        position = {x = base_x, y = base_y - spacing},
-        text = "myth_armor.png",
-        number = 20,
-        direction = 0,
-        size = {x = 24, y = 24},
+    hud_elements[name].hunger_icon = player:hud_add({
+        hud_elem_type = "image",
+        position = {x = base_x, y = base_y - spacing_y},
+        scale = {x = icon_scale, y = icon_scale},
+        text = "hbhunger_icon.png",
         alignment = {x = 0, y = 0},
-        offset = {x = 0, y = 0},
+    })
+    hud_elements[name].hunger_text = player:hud_add({
+        hud_elem_type = "text",
+        position = {x = base_x + text_offset_x, y = base_y - spacing_y + 0.005},
+        text = tostring(MAX_HUNGER),
+        alignment = {x = 0, y = 0},
+        scale = {x = 1.5, y = 1.5},
+        number = 0xFFD166,
     })
 
-    -- Hunger
-    hud_elements[name].hunger = {}
-    for i = 1, 10 do
-        local id = player:hud_add({
-            hud_elem_type = "image",
-            position = {x = base_x + (i - 1) * 0.025, y = base_y - 2 * spacing},
-            offset = {x = 0, y = 0},
-            scale = {x = 1, y = 1},
-            text = "myth_food_full.png",
-            alignment = {x = 0, y = 0},
-        })
-        table.insert(hud_elements[name].hunger, id)
-    end
+    hud_elements[name].thirst_icon = player:hud_add({
+        hud_elem_type = "image",
+        position = {x = base_x, y = base_y - spacing_y * 2},
+        scale = {x = icon_scale, y = icon_scale},
+        text = "thirst_hud_icon.png",
+        alignment = {x = 0, y = 0},
+    })
+    hud_elements[name].thirst_text = player:hud_add({
+        hud_elem_type = "text",
+        position = {x = base_x + text_offset_x, y = base_y - spacing_y * 2 + 0.005},
+        text = tostring(MAX_THIRST),
+        alignment = {x = 0, y = 0},
+        scale = {x = 1.5, y = 1.5},
+        number = 0x4AC6FF,
+    })
 
-    -- Hide default hotbar and move hotbar to right if supported
-    if player.hud_set_hotbar_visible then
-        player:hud_set_hotbar_visible(false)
-    end
+    hud_elements[name].breath_icon = player:hud_add({
+        hud_elem_type = "image",
+        position = {x = base_x, y = base_y - spacing_y * 3},
+        scale = {x = icon_scale, y = icon_scale},
+        text = "hudbars_icon_breath.png",
+        alignment = {x = 0, y = 0},
+    })
+    hud_elements[name].breath_text = player:hud_add({
+        hud_elem_type = "text",
+        position = {x = base_x + text_offset_x, y = base_y - spacing_y * 3 + 0.005},
+        text = tostring(MAX_BREATH),
+        alignment = {x = 0, y = 0},
+        scale = {x = 1.5, y = 1.5},
+        number = 0x44FFBB,
+    })
 
-    if player.hud_set_hotbar_itemcount then
-        player:hud_set_hotbar_itemcount(10)
-    end
+    hud_elements[name].xp_bar_bg = player:hud_add({
+        hud_elem_type = "image",
+        position = XP_BAR_POS,
+        scale = XP_BAR_SCALE,
+        offset = get_xp_bar_offset(),
+        text = "myth_xp_bg.png",
+        alignment = {x = 0.5, y = 0.5},
+    })
 
-    if player.hud_set_hotbar_image then
-        player:hud_set_hotbar_image("myth_hotbar_bg.png")
-    end
-
-    if player.hud_set_hotbar_selected_image then
-        player:hud_set_hotbar_selected_image("myth_hotbar_select.png")
-    end
-
-    if player.hud_set_hotbar_position then
-        -- Right side, near bottom
-        player:hud_set_hotbar_position({x = 0.95, y = 0.97})
-    end
-
-    if player.hud_set_hotbar_alignment then
-        player:hud_set_hotbar_alignment({x = 1, y = 1})
-    end
+    hud_elements[name].xp_bar_fg = player:hud_add({
+        hud_elem_type = "image",
+        position = XP_BAR_POS,
+        scale = XP_BAR_SCALE,
+        offset = get_xp_bar_offset(),
+        text = "myth_xp_overlay.png",
+        alignment = {x = 0, y = 0.5},
+    })
 end
 
--- Update HUD values
 function myth_ui.update(player, stats)
     local name = player:get_player_name()
     if not hud_elements[name] then return end
 
-    if stats.health then
-        player:hud_change(hud_elements[name].health, "number", stats.health)
+    if stats.health ~= nil then
+        player:hud_change(hud_elements[name].health_text, "text", tostring(stats.health))
     end
-
-    if stats.armor then
-        player:hud_change(hud_elements[name].armor, "number", stats.armor)
+    if stats.hunger ~= nil then
+        player:hud_change(hud_elements[name].hunger_text, "text", tostring(stats.hunger))
     end
-
-    if stats.hunger then
-        local hunger_icons = hud_elements[name].hunger
-        local hunger = stats.hunger or 0
-
-        for i = 1, 10 do
-            local icon = "myth_food_empty.png"
-            if i <= hunger then
-                icon = "myth_food_full.png"
-            elseif i - 0.5 == hunger then
-                icon = "myth_food_half.png"
-            end
-            player:hud_change(hunger_icons[i], "text", icon)
-        end
+    if stats.thirst ~= nil then
+        player:hud_change(hud_elements[name].thirst_text, "text", tostring(stats.thirst))
+    end
+    if stats.breath ~= nil then
+        player:hud_change(hud_elements[name].breath_text, "text", tostring(stats.breath))
+    end
+    if stats.xp ~= nil then
+        local ratio = math.max(0, math.min(1, stats.xp))
+        local width = math.floor(XP_BAR_SIZE.x * ratio)
+        player:hud_change(hud_elements[name].xp_bar_fg, "scale", {
+            x = XP_BAR_SCALE.x * (width / XP_BAR_SIZE.x), y = XP_BAR_SCALE.y
+        })
+        player:hud_change(hud_elements[name].xp_bar_fg, "offset", {
+            x = get_xp_bar_offset().x + (width * XP_BAR_SCALE.x / 2) - (XP_BAR_SIZE.x * XP_BAR_SCALE.x / 2),
+            y = 0
+        })
     end
 end
 
--- Handle player join/leave
 minetest.register_on_joinplayer(function(player)
+    local name = player:get_player_name()
+    player_effects[name] = {
+        breath = MAX_BREATH,
+        hunger = MAX_HUNGER,
+        thirst = MAX_THIRST,
+        health = MAX_HEALTH,
+        xp = 0,
+    }
+    breath_timers[name] = 0
+    player_xp[name] = 0
+
+    player:hud_set_hotbar_itemcount(9)
+    player:hud_set_flags({healthbar = false})
+
     init_hud(player)
+    myth_ui.update(player, player_effects[name])
 end)
 
 minetest.register_on_leaveplayer(function(player)
+    local name = player:get_player_name()
     remove_hud(player)
+    player_effects[name] = nil
+    breath_timers[name] = nil
+    player_xp[name] = nil
+end)
+
+minetest.register_globalstep(function(dtime)
+    for _, player in ipairs(minetest.get_connected_players()) do
+        local name = player:get_player_name()
+        local effects = player_effects[name]
+        if not effects then goto continue end
+
+        breath_timers[name] = (breath_timers[name] or 0) + dtime
+
+        if breath_timers[name] >= 1 then
+            breath_timers[name] = 0
+
+            local pos = player:get_pos()
+            local head_pos = {x = pos.x, y = pos.y + 1.5, z = pos.z}
+            local node = minetest.get_node_or_nil(head_pos)
+            local underwater = false
+
+            if node then
+                local def = minetest.registered_nodes[node.name]
+                if def and def.groups and def.groups.water then
+                    underwater = true
+                end
+            end
+
+            if underwater then
+                if effects.breath > 0 then
+                    effects.breath = effects.breath - 1
+                else
+                    local hp = player:get_hp()
+                    if hp > 2 then
+                        player:set_hp(hp - 2)
+                        minetest.chat_send_player(name, "You are drowning!")
+                    end
+                end
+            else
+                effects.breath = MAX_BREATH
+            end
+
+            if effects.hunger == MAX_HUNGER then
+                local hp = player:get_hp()
+                if hp < MAX_HEALTH then
+                    player:set_hp(hp + 1)
+                end
+            end
+
+            myth_ui.update(player, {
+                breath = effects.breath,
+                health = player:get_hp()
+            })
+        end
+
+        ::continue::
+    end
 end)
 
 return myth_ui
