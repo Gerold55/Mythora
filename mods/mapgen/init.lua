@@ -25,14 +25,14 @@ dofile(modpath .. "/plains/decorations.lua")
 -- Load terrain generator first
 dofile(modpath .. "/terrain.lua")
 
-minetest.register_biome({
-    name = "goldenreach_plains",
-    node_top = "mapgen:plains_grass",
-    depth_top = 1,
-    node_filler = "mapgen:plains_dirt",
-    depth_filler = 3,
-    y_max = 80,
-    y_min = 1,
-    heat_point = 50,
-    humidity_point = 40,
-})
+--minetest.register_biome({
+--    name = "goldenreach_plains",
+--    node_top = "mapgen:plains_grass",
+--    depth_top = 1,
+--    node_filler = "mapgen:plains_dirt",
+--    depth_filler = 3,
+--    y_max = 80,
+--    y_min = 1,
+--    heat_point = 50,
+--    humidity_point = 40,
+--})
