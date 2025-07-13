@@ -20,3 +20,14 @@ minetest.register_on_joinplayer(function(player)
         end
     end)
 end)
+
+minetest.register_on_player_inventory_action(function(player, action, inventory, info)
+    if action == "take" and inventory:get_name() == "creative" then
+        local wielded_stack = player:get_wielded_item()
+        local item_name = wielded_stack:get_name()
+        if item_name ~= "" then
+            local full_stack = ItemStack(item_name .. " 99")  -- 99 is max stack size in creative
+            player:set_wielded_item(full_stack)
+        end
+    end
+end)

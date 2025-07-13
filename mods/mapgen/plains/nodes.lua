@@ -84,6 +84,12 @@ minetest.register_node("mapgen:sand", {
     is_ground_content = true
 })
 
+minetest.register_node("mapgen:brick", {
+    description = "Brick",
+    tiles = {"myth_brick.png"},
+    groups = {cracky = 3, stone = 1},
+})
+
 local function register_biome_water(name, color_hex)
 
     minetest.register_node("mapgen:water_source_" .. name, {
@@ -177,6 +183,172 @@ local function register_biome_water(name, color_hex)
         sounds = default and default.node_sound_water_defaults or nil,
     })
 end
+
+local texture_variants = {
+    uv0   = "",
+    uv90  = "^[transformR90",
+    uv180 = "^[transformR180",
+    uv270 = "^[transformR270",
+}
+
+local base_texture = "myth_leaves_oak1.png"
+
+local function register_oak_leaves_for_biome(biome_name)
+    local color_hex = biome_colors[biome_name]
+    if not color_hex then
+        minetest.log("warning", "[mapgen] No color defined for biome leaves: " .. biome_name)
+        return
+    end
+
+    for variant, transform in pairs(texture_variants) do
+        local node_name = "mapgen:leaves_" .. biome_name .. "_oak_" .. variant
+
+        -- Define groups, hiding all but uv0 from inventory
+        local groups = {
+            snappy = 3,
+            flammable = 2,
+            leaves = 1
+        }
+
+        if variant ~= "uv0" then
+            groups.not_in_creative_inventory = 1
+        end
+
+        minetest.register_node(node_name, {
+            description = biome_name:gsub("^%l", string.upper) .. " Oak Leaves",
+            drawtype = "mesh",
+            mesh = "myth_oak_leaves.obj",
+            tiles = {
+                base_texture .. transform .. "^[colorize:" .. color_hex .. ":150"
+            },
+            paramtype = "light",
+            use_texture_alpha = "clip",
+            waving = 1,
+            sunlight_propagates = true,
+            walkable = false,
+            groups = groups,
+            selection_box = {
+                type = "fixed",
+                fixed = {-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+            },
+            drop = "mapgen:leaves_" .. biome_name .. "_oak_uv0",
+        })
+    end
+end
+
+-- Register oak leaves for all defined biomes
+for biome_name, _ in pairs(biome_colors) do
+    register_oak_leaves_for_biome(biome_name)
+end
+
+local function can_grow_tree(pos)
+    -- Check if there’s enough space for the tree to grow
+    -- Customize bounds depending on your tree generator's size
+
+    for x = -3, 3 do
+        for y = 1, 6 do
+            for z = -3, 3 do
+                local p = {x=pos.x + x, y=pos.y + y, z=pos.z + z}
+                local node = minetest.get_node(p)
+                if node.name ~= "air" and node.name ~= "ignore" then
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
+local function place_sapling(itemstack, placer, pointed_thing)
+    if not pointed_thing or pointed_thing.type ~= "node" then
+        return itemstack
+    end
+
+    local under = pointed_thing.under
+    local above = pointed_thing.above
+    local node_under = minetest.get_node(under)
+
+    -- You may want to restrict sapling placement to grass or dirt
+    local allowed_soil = {
+        ["mapgen:grass_block_greenhollow"] = true,
+        ["mapgen:dirt"] = true,
+    }
+
+    if not allowed_soil[node_under.name] then
+        return itemstack -- disallow placement on non-soil nodes
+    end
+
+    -- Check if above node is air
+    local node_above = minetest.get_node(above)
+    if node_above.name ~= "air" then
+        return itemstack -- can't place if no space above
+    end
+
+    -- Place sapling
+    minetest.set_node(above, {name = "mapgen:sapling_oak"})
+
+    if not minetest.is_creative_enabled(placer:get_player_name()) then
+        itemstack:take_item()
+    end
+
+    return itemstack
+end
+
+minetest.register_node("mapgen:sapling_oak", {
+    description = "Oak Tree Sapling",
+    drawtype = "plantlike",
+    tiles = {"myth_sapling_oak.png"},
+    inventory_image = "myth_sapling_oak.png",
+    wield_image = "myth_sapling_oak.png",
+    paramtype = "light",
+    sunlight_propagates = true,
+    walkable = false,
+    selection_box = {
+        type = "fixed",
+        fixed = {-4/16, -0.5, -4/16, 4/16, 7/16, 4/16},
+    },
+    groups = {snappy = 2, dig_immediate = 3, flammable = 2, attached_node = 1, sapling = 1},
+
+    on_timer = function(pos)
+        if can_grow_tree(pos) then
+            grow_mythora_oak_tree(pos)
+        else
+            -- Not enough space yet, restart timer to try later
+            minetest.get_node_timer(pos):start(600)
+        end
+    end,
+
+    on_construct = function(pos)
+        minetest.get_node_timer(pos):start(math.random(300, 1500))
+    end,
+
+    on_place = place_sapling,
+})
+
+
+ minetest.register_node("mapgen:tree_oak", {
+        description = "Oak Log",
+        tiles = {
+            "myth_oak_top.png",
+            "myth_oak_top.png",
+            "myth_oak_side.png",
+        },
+        paramtype2 = "facedir",
+        is_ground_content = false,
+        groups = {tree = 1, choppy = 2, oddly_breakable_by_hand = 1, flammable = 2},
+        on_place = minetest.rotate_node,
+    })
+
+minetest.register_node("mapgen:wood_planks", {
+    description = "Oak Wood Planks",
+    tiles = {"myth_oak_wood.png"},
+    paramtype2 = "facedir",
+    place_param2 = 0,
+    is_ground_content = false,
+    groups = {choppy = 2, oddly_breakable_by_hand = 2, flammable = 2, wood = 1},
+})
+
+
 
 -- Example usage:
 register_biome_water("plains", "#7ABCFF")
