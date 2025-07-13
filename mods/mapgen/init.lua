@@ -1,7 +1,7 @@
 mapgen = {}  -- Global mod namespace if not using one already
 
 mapgen.biome_colors = {
-    plains  = "#2C4900",  -- lush green
+    plains  = "#406800",  -- lush green
     dry     = "#A09060",  -- dry yellow
     swamp   = "#507050",  -- dark green
     snowy   = "#B0E0E6",  -- icy blue

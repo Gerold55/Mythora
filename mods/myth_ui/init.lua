@@ -4,6 +4,24 @@ local modpath = minetest.get_modpath(minetest.get_current_modname())
 local myth_ui = {}
 local hud_elements = {}
 
+-- Utility function to include other files
+local function load_file(name)
+    local path = modpath .. "/" .. name
+    local result, err = loadfile(path)
+    if result then
+        result()
+    else
+        minetest.log("error", "[Mythora] Failed to load: " .. name .. " - " .. err)
+    end
+end
+
+-- Core loading sequence
+load_file("pickblock.lua")         -- if you have global settings
+load_file("commands.lua")           -- biome definitions and registrations
+
+minetest.log("action", "[Mythora] All modules loaded successfully.")
+
+
 -- Constants
 local MAX_BREATH = 10
 local MAX_HEALTH = 20
