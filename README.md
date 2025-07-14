@@ -1,4 +1,4 @@
-#Mythora
+Mythora
 
 Mythora is an immersive voxel-based RPG adventure game set in a rich, magical fantasy world. Drawing inspiration from titles like Hytale but with its own unique twist, Mythora offers expansive biomes, dynamic weather, and a deep crafting system that lets players explore, build, and survive in a beautifully crafted blocky universe.
 
