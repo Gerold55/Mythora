@@ -63,6 +63,27 @@ for biome_name, _ in pairs(biome_colors) do
     register_biome_grass(biome_name)
 end
 
+minetest.register_node("mapgen:mossgrass", {
+    description = "Emerald Mossgrass",
+    drawtype = "nodebox",
+    tiles = {
+        "myth_emerald_mossgrass.png",   -- Top texture
+        "myth_dirt.png",            -- Bottom texture (optional)
+        "myth_emerald_mossgrass_side.png",  -- Sides (can be same as top if you prefer)
+    },
+    paramtype = "light",
+    use_texture_alpha = "clip",  -- Or "blend" if you want transparency
+    sunlight_propagates = true,
+    walkable = true,
+    buildable_to = false,
+    groups = {
+        crumbly = 3,
+        soil = 1,
+        grass = 1,
+        moss = 1,
+    },
+})
+
 
 -- Dirt block (shared across all biomes)
 minetest.register_node("mapgen:dirt", {
@@ -222,6 +243,8 @@ local function register_oak_leaves_for_biome(biome_name)
                 base_texture .. transform .. "^[colorize:" .. color_hex .. ":150"
             },
             paramtype = "light",
+			paramtype2 = "degrotate",
+			place_param2 = 0,
             use_texture_alpha = "clip",
             waving = 1,
             sunlight_propagates = true,
@@ -326,18 +349,91 @@ minetest.register_node("mapgen:sapling_oak", {
 })
 
 
- minetest.register_node("mapgen:tree_oak", {
-        description = "Oak Log",
-        tiles = {
-            "myth_oak_top.png",
-            "myth_oak_top.png",
-            "myth_oak_side.png",
+minetest.register_node("mapgen:tree_oak", {
+    description = "Oak Log",
+    tiles = {
+        "myth_oak_top.png",  -- top
+        "myth_oak_top.png",  -- bottom
+        "myth_oak_side.png", -- sides
+    },
+    paramtype2 = "facedir",
+    is_ground_content = false,
+    groups = {
+        tree = 1,
+        choppy = 2,
+        oddly_breakable_by_hand = 1,
+        flammable = 2,
+    },
+    on_place = minetest.rotate_node,
+})
+
+	
+	minetest.register_node("mapgen:myth_branch_oak", {
+    description = "Oak Tree Branch",
+    drawtype = "nodebox",
+    tiles = {"myth_oak_side.png"},
+    paramtype = "light",
+    paramtype2 = "facedir",
+    groups = {tree=1, choppy=2, oddly_breakable_by_hand=1, flammable=2},
+    node_box = {
+        type = "fixed",
+        fixed = {
+            -- branch along +X axis
+            {-0.5, -0.15, -0.15, 0.5, 0.15, 0.15},
         },
-        paramtype2 = "facedir",
-        is_ground_content = false,
-        groups = {tree = 1, choppy = 2, oddly_breakable_by_hand = 1, flammable = 2},
-        on_place = minetest.rotate_node,
-    })
+    },
+    
+    on_place = function(itemstack, placer, pointed_thing)
+        local under_pos = pointed_thing.under
+        local above_pos = pointed_thing.above
+        local under_node = minetest.get_node(under_pos)
+
+        local valid_attach = {
+            ["mapgen:myth_branch_oak"] = true,
+            ["mapgen:tree_oak"] = true,
+        }
+
+        if not valid_attach[under_node.name] then
+            return itemstack  -- refuse to place if not attaching to log/branch
+        end
+
+        local dir = vector.subtract(above_pos, under_pos)
+        local param2 = 0
+
+        if math.abs(dir.x) > math.abs(dir.z) then
+            if dir.x > 0 then
+                param2 = 0 -- +X
+            else
+                param2 = 2 -- -X
+            end
+        else
+            if dir.z > 0 then
+                param2 = 1 -- +Z
+            else
+                param2 = 3 -- -Z
+            end
+        end
+
+        -- Optional: Handle vertical attachment (Y axis)
+        if math.abs(dir.y) > math.max(math.abs(dir.x), math.abs(dir.z)) then
+            if dir.y > 0 then
+                param2 = 20 -- +Y up
+            else
+                param2 = 24 -- -Y down
+            end
+        end
+
+        minetest.set_node(above_pos, {name = "mapgen:myth_branch_oak", param2 = param2})
+
+        if not (creative and creative.is_enabled_for and creative.is_enabled_for(placer:get_player_name())) then
+            itemstack:take_item()
+        end
+
+        return itemstack
+    end,
+})
+
+
 
 minetest.register_node("mapgen:wood_planks", {
     description = "Oak Wood Planks",
